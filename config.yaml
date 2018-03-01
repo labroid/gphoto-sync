@@ -1,0 +1,74 @@
+gphotos:
+  host: 'mongodb://labroid:mlab14@ds057176.mlab.com:57176/photo-meta'
+  database: 'photo-meta'
+  collection: 'gphotos'
+#  host: 'localhost'
+#  database: 'gp'
+#  collection: 'gphotos'
+  gphoto_db_alias: 'gphotos'
+
+#task_queue:
+#  host: 'localhost'
+#  database: 'task_queue'
+#  collection: 'archive_jobs'
+
+local:
+  gphoto_upload_queue: "C:\\Users\\SJackson\\Pictures\\GooglePhotosQueue"
+  mirror_root: "C:\\Users\\SJackson\\Pictures\\gphoto_mirror"
+  image_filetypes: ['.jpg', '.jpeg', '.bmp', '.mov', '.gif', '.tif', '.tiff', '.fpx']
+  log_file_base: "C:\\Users\\SJackson\\Documents\\Personal\\Programming"
+  mongod_path: "C:\\Program Files\\MongoDB\\Server\\3.2\\bin\\mongod.exe"
+  database: "photo_manager"
+
+#  virtulenv: "C:\\Users\\SJackson\\Documents\\Personal\\Programming\\flex_py3\\env\\Scripts\\python.exe"
+#  worker_paths: [
+#    "C:\\Users\\SJackson\\Documents\\Personal\\Programming\\flex_py3\\queueworker.py",
+#    "C:\\Users\\SJackson\\Documents\\Personal\\Programming\\flex_py3\\md5worker.py",
+#    "C:\\Users\\SJackson\\Documents\\Personal\\Programming\\flex_py3\\web_service.py",
+#    "C:\\Users\\SJackson\\Documents\\Personal\\Programming\\flex_py3\\in_gphotos_worker.py",
+#  ]
+
+logging:
+  version: 1
+
+  handlers:
+
+    console:
+      class: logging.StreamHandler
+      level: DEBUG
+      stream: ext://sys.stderr
+      formatter: simpleFormatter
+
+    file:
+      class: logging.handlers.RotatingFileHandler
+      filename: app.log
+      mode: w
+      level: DEBUG
+      formatter: simpleFormatter
+      maxBytes: 1048576
+      backupCount: 10
+
+  formatters:
+    simpleFormatter:
+      #class: !!python/name:logging.Formatter
+      #class: logging.Formatter
+      format: "%(asctime)s - %(levelname)s - %(module)s - %(funcName)s - %(message)s"
+      #datefmt: '%d/%m/%Y %H:%M:%S'
+
+  root:
+    level: DEBUG
+    handlers: [console, file]
+
+  loggers:
+    local_db:
+      level: DEBUG
+      handlers: [console, file]
+
+# # LOG_FILE = os.path.join(r"C:\Users\SJackson\Documents\Personal\Programming\photolog.txt") COLLECTION: 'gphotos'
+
+#
+#LOG_CONFIG:
+#    filename: LOG_FILE,
+#    format: LOG_FORMAT,
+#    level: logging.DEBUG,
+#    filemode: 'w'
