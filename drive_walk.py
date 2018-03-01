@@ -1,6 +1,5 @@
-# walk_gdrive.py - os.walk variation with Google Drive API
-
 import os
+import json
 
 from apiclient.discovery import build  # pip install google-api-python-client
 
@@ -22,41 +21,34 @@ creds = get_credentials('https://www.googleapis.com/auth/drive.metadata.readonly
 service = build('drive', version='v3', credentials=creds)
 
 
-def iterfiles(name=None, is_folder=None, parent=None, order_by='folder,name,createdTime'):
-    q = ["trashed = false"]
-    if name is not None:
-        q.append("name = '%s'" % name.replace("'", "\\'"))
-    if is_folder is not None:
-        q.append("mimeType %s '%s'" % ('=' if is_folder else '!=', FOLDER))
-    if parent is not None:
-        q.append("'%s' in parents" % parent.replace("'", "\\'"))
-    params = {'pageToken': None, 'orderBy': order_by}
-    if q:
-        params['q'] = ' and '.join(q)
+def walk(parent):
+    path.append(parent['name'])
+    print("Path: {}".format(path))
+    nodes = get_nodes(parent)
+    for node in nodes:
+        if node['mimeType'] == 'application/vnd.google-apps.folder':
+            walk(node)
+        else:
+            # print("Saving",path, node)
+            pass
+    path.pop()
+
+
+def get_nodes(parent):
+    nodes = []
+    nextpagetoken = None
     while True:
-        response = service.files().list(**params).execute()
-        for f in response['files']:
-            yield f
-        try:
-            params['pageToken'] = response['nextPageToken']
-        except KeyError:
-            return
+        response = service.files().list(q=f"'{parent['id']}' in parents and trashed = false", pageSize=1000, pageToken=nextpagetoken).execute()
+        print(f"Drive delivered {len(response['files'])} files")
+        nodes.extend(response['files'])
+        nextpagetoken = response.get('nextPageToken')
+        if nextpagetoken is None:
+            return nodes
 
 
-def walk(top):
-    top, = iterfiles(name=top, is_folder=True)
-    stack = [((top['name'],), [top])]
-    while stack:
-        path, tops = stack.pop()
-        for top in tops:
-            dirs, files = is_file = [], []
-            for f in iterfiles(parent=top['id']):
-                is_file[f['mimeType'] != FOLDER].append(f)
-            yield path, top, dirs, files
-            if dirs:
-                stack.append((path + (top['name'],), dirs))
-
-
-for path, root, dirs, files in walk('Google Photos'):
-    print(path, root, dirs, files)
-    # print('%s\t%d %d' % ('/'.join(path), len(dirs), len(files)))
+root = 'Google Photos'
+gphotos = service.files().list(q=f"name = '{root}' and trashed = false").execute()
+gphotonode = gphotos['files'][0]
+print("Got gphotodir")
+path = []
+walk(gphotonode)
