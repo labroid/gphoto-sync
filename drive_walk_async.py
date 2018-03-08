@@ -1,5 +1,6 @@
 import mongoengine as me
 import asyncio
+import functools
 import time
 import os
 from apiclient.discovery import build  # pip install google-api-python-client
@@ -80,16 +81,19 @@ class GphotoSync:
 # TODO:  There is no sentry to ever end this insanity
     async def process_queue(self, loop, folder_queue):
         while True:
+            print(f"Queue depth: {folder_queue.qsize()}")
             parent = await folder_queue.get()
-            print(f"Got from queue: {parent['name']}")
-            await self.process_node(loop, folder_queue, parent)
+            coro = self.process_node(loop, folder_queue, parent)
+            loop.create_task(coro)
+            print(f'Active tasks count: {len([task for task in asyncio.Task.all_tasks() if not task.done()])}')
 
     async def process_node(self, loop, folder_queue, parent):
         db_nodes = []
+        folders = []
         path = parent['path'] + [parent['name']]
         print(f"Path: {path}")
         nodes = await loop.run_in_executor(None, self.get_children, parent)
-        print(f"Got {path}")
+        print(f"Got {path} {len(nodes)} nodes")
         for node in nodes:
             node['path'] = path
             clean_node = self.steralize(node)
