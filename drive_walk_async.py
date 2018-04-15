@@ -72,7 +72,11 @@ class GphotoSync:
         loop = asyncio.get_event_loop()
         queue = asyncio.Queue()
         loop.run_until_complete(queue.put(gphoto_node))
-        loop.run_until_complete(self.process_queue(loop, queue))
+        # loop.run_until_complete(self.process_queue(loop, queue))
+        loop.run_until_complete(asyncio.gather(
+            self.process_queue(loop, queue),
+            self.monitor_proc(loop),
+        ))
         loop.close()
 
         self.update_start_token()
@@ -81,11 +85,17 @@ class GphotoSync:
 # TODO:  There is no sentry to ever end this insanity
     async def process_queue(self, loop, folder_queue):
         while True:
-            print(f"Queue depth: {folder_queue.qsize()}")
             parent = await folder_queue.get()
             coro = self.process_node(loop, folder_queue, parent)
             loop.create_task(coro)
-            print(f'Active tasks count: {len([task for task in asyncio.Task.all_tasks() if not task.done()])}')
+
+    async def monitor_proc(self, loop):
+        while True:
+            await asyncio.sleep(2)
+            proc_count = len([task for task in asyncio.Task.all_tasks() if not task.done()])
+            print(f'Active tasks count: {proc_count}')
+            if proc_count < 2:
+                loop.stop()
 
     async def process_node(self, loop, folder_queue, parent):
         db_nodes = []

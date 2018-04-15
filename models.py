@@ -10,16 +10,18 @@ class Db_connect():
 
 
 class Gphoto(me.Document):  # TODO: Remove strict: false from metadata once db is clean
-    gid = me.StringField()
+    gid = me.StringField(required=True)
     imageMediaMetadata = me.DictField()
-    md5Checksum = me.StringField()
-    mimeType = me.StringField()
-    name = me.StringField()
+    md5Checksum = me.StringField(required=True)
+    mimeType = me.StringField(required=True)
+    name = me.StringField(required=True)
     originalFilename = me.StringField()
     ownedByMe = me.BooleanField()
-    parents = me.ListField()
+    parents = me.ListField(required=True)
     gsize = me.IntField()
     trashed = me.BooleanField()
+    removed = me.BooleanField()
+    path = me.ListField()
     meta = {
         'db_alias': cfg.gphotos.collection,
         'indexes': ['gid', 'md5Checksum'],
@@ -33,6 +35,7 @@ class Gphoto_change(me.Document):
     meta = {'db_alias': cfg.gphotos.collection}
 
 
+# TODO: I don't think this document is deprecated
 class Gphoto_parent(me.Document):
     gid = me.StringField()
     mimeType = me.StringField()

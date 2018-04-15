@@ -1,10 +1,15 @@
 gphotos:
-  host: 'mongodb://labroid:mlab14@ds057176.mlab.com:57176/photo-meta'
-  database: 'photo-meta'
-  collection: 'gphotos'
+#  host: 'mongodb://labroid:mlab14@ds057176.mlab.com:57176/photo-meta'
+#  database: 'photo-meta'
+#  collection: 'gphotos'
 #  host: 'localhost'
 #  database: 'gp'
 #  collection: 'gphotos'
+  host: 'mongodb://scott:mongo14@localhost/gp'
+  database: 'gp'
+  collection: 'gphotos'
+  username:  'scott'
+  password: 'mongo14'
   gphoto_db_alias: 'gphotos'
 
 #task_queue:
