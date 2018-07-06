@@ -1,5 +1,6 @@
+import warnings
+
 import mongoengine as me
-import time
 import datetime
 import functools
 import os
@@ -31,6 +32,7 @@ def main():
     gsync.sync()
     # gsync.set_paths()
 
+
 def get_credentials(scopes, secrets=r'C:\Users\SJackson\PycharmProjects\gphotos-sync\client_secret.json', storage='~/storage.json'):
     from oauth2client import file, client, tools
     store = file.Storage(os.path.expanduser(storage))
@@ -55,8 +57,7 @@ class GphotoSync:
             self.log.info("Database dirty: Rebulding")
             self.rebuild_db()
         else:
-            self.get_changes()
-            self.set_paths()
+            self.update_db()
         self.update_start_token()
 
     def rebuild_db(self):
@@ -111,10 +112,6 @@ class GphotoSync:
             self.log.info(f"{elapsed} Drive delivered {count} files. Total: {cumulative}")
             sterile_nodes = [self.steralize(x) for x in response['files']]
             nodes += [Gphoto(**x) for x in sterile_nodes]
-            # start_time = datetime.datetime.now()
-            # Gphoto.objects.insert(nodes)
-            # elapsed = datetime.datetime.now() - start_time
-            # self.log.info(f"{elapsed} Persisted")
             nextpagetoken = response.get('nextPageToken')
             if nextpagetoken is None:
                 return nodes
@@ -156,16 +153,18 @@ class GphotoSync:
                                               includeRemoved=True,
                                               fields=UPDATE_FIELDS).execute()
             self.log.info(f"Google sent {len(response.get('changes', []))} change records")
-            changes.extend(response['changes'])
+            changes += response['changes']
             change_token = response.get('nextPageToken')
             if change_token is None:
                 break
         return changes
 
-    def update_db(self, change_token):
+    def update_db(self):
         delete_count = new_count = 0
+        self.db_state.clean = False
+        change_token = Gphoto_change.objects(key='change_start_page_token').get().value
         changes = self.get_changes(change_token)
-        for change in (changes or []):  # TODO: I don't think it can ever be []. This may be old
+        for change in (changes or []):
             if change['removed'] or change['file']['trashed']:
                 try:
                     Gphoto.objects(gid=change['fileId']).get()
@@ -184,44 +183,45 @@ class GphotoSync:
                 continue
             self.log.info(f"Updating file {change['file']['name']}")
             change['file'] = self.steralize(change['file'])
-            # if len(change.get('file', None).get('parents', None)) < 1:
-            # if len(change['file']['parents']) < 1:
-            #     err_str = f"Parents list empty for ID {change['file']['id']} - something is strange."
-            #     self.log.info(err_str)
-            #     raise ValueError(err_str)
+            if len(change.get('file', None).get('parents', None)) < 1:
+                if len(change['file']['parents']) < 1:
+                    warn_str = f"Parents list empty for ID {change['file']['id']} - something is strange."
+                    self.log.info(warn_str)
+                    warnings.warn(warn_str)
             Gphoto.objects(gid=change['file']['gid']).update_one(upsert=True, **change['file'])
             new_count += 1
-        # self.set_paths()
+        self.set_paths()
+        self.purge_nodes_outside_roots()
+        self.db_state.clean = True
         self.log.info(f"Sync update complete. New file count: {new_count} Deleted file count: {delete_count}")
 
     def set_paths(self):
-        monitor = 0
         orphans = Gphoto.objects(path=[])
         print(f"Number of orphans: {orphans.count()}")
         for orphan in orphans:
-            monitor += 1
-            if not (monitor % 100):
-                print(monitor)
             path = self.get_node_path(orphan)
             Gphoto.objects(gid=orphan.gid).update_one(upsert=True, path=path)
         self.log.info(f"Cache stats: {self.get_node_path.cache_info()}")
 
     @functools.lru_cache()
-    def get_node_path(self, node):  #TODO: Need to add My Drive to database??
-        if len(node.parents) < 1:   #Should cover roots as well as root files??
-            return ['*NoParents*']
+    def get_node_path(self, node):
+        if len(node.parents) < 1:
+            return []
         try:
             parent = Gphoto.objects(gid=node.parents[0]).get()
         except me.MultipleObjectsReturned as e:
-            self.log.info(f"Wrong number of records returned for {node.gid}. Error {e}")
+            self.log.warning(f"Wrong number of records returned for {node.gid}. Error {e}")
             return ['*MultiParents*']
         except me.DoesNotExist as e:
-            #self.log.info(f"Parent does not exist. Error {e}")
+            self.log.warning(f"Parent does not exist. Error {e}")
             return ['*ParentNotInDb*']
-        if parent.path != []:
+        if parent.path:
             return parent.path + [parent.name]
         else:
             return self.get_node_path(parent) + [parent.name]
+
+    def purge_nodes_outside_roots(self):
+        pass # TODO: This should purge folders outside of the roots. No harm in current use to have folders hanging around
 
     def list_node(self, name=None):
         node_json = service.files().list(q=f"name = '{name}' and trashed = false").execute()
@@ -229,7 +229,7 @@ class GphotoSync:
 
     def get_node(self, id):
         # TODO: Looks like it needs to be the file name ('My Laptop') without parents
-        node_json = service.files().get(fileId=id, fields = FILE_FIELDS).execute()  #TODO: Make sure search for not deleted nodes (right below root??)
+        node_json = service.files().get(fileId=id, fields=FILE_FIELDS).execute()  # TODO: Make sure search for not deleted nodes (right below root??)
         return Gphoto(**self.steralize(node_json))
 
     # def ascend(self, node):
@@ -258,7 +258,7 @@ class GphotoSync:
         def __get_clean_state(self):
             try:
                 db_state = Gphoto_change.objects(key='database_clean').get().boolvalue
-            except (me.DoesNotExist, me.MultipleObjectsReturned) as e:
+            except (me.DoesNotExist, me.MultipleObjectsReturned):
                 db_state = False
             return db_state
 
